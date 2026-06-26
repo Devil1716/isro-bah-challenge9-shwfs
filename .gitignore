@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.pt
+*.pth
+*.onnx
+*.engine
+*.trt
+*.npz
+build/
+cpp/build/
+.pytest_cache/
