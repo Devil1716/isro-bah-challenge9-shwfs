@@ -331,6 +331,86 @@ class DatasetGenerator(Dataset):
         )
 
 
+
+
+def _normalize_shwfs_frame(frame: np.ndarray) -> np.ndarray:
+    frame = frame.astype(np.float32)
+    return frame / (frame.max() + 1e-6)
+
+
+class BmpShwfsDataset(Dataset):
+    """Load real SHWFS .bmp frames plus labels.npz when challenge data arrives."""
+
+    def __init__(self, data_dir: str | os.PathLike[str], n_zernike: int, detector_size: int):
+        from PIL import Image
+
+        self.data_dir = Path(data_dir)
+        self.n_zernike = n_zernike
+        self.detector_size = detector_size
+        self.paths = sorted(self.data_dir.rglob("*.bmp"))
+        if not self.paths:
+            raise FileNotFoundError(f"No .bmp files found under {self.data_dir.resolve()}")
+
+        labels_path = self.data_dir / "labels.npz"
+        if not labels_path.is_file():
+            raise FileNotFoundError(
+                f"Real-frame training requires {labels_path} with coeffs and phases "
+                "(one row per BMP, sorted alphabetically by filename)."
+            )
+        labels = np.load(labels_path)
+        self.coeffs = labels["coeffs"].astype(np.float32)
+        phases = labels["phases"].astype(np.float32)
+        if phases.ndim == 3:
+            phases = phases[:, None, ...]
+        self.phases = phases
+
+        n = len(self.paths)
+        if self.coeffs.shape[0] != n or self.phases.shape[0] != n:
+            raise ValueError(
+                f"Found {n} BMP files but labels.npz has coeffs={self.coeffs.shape[0]}, "
+                f"phases={self.phases.shape[0]}"
+            )
+        if self.coeffs.shape[1] != n_zernike:
+            raise ValueError(f"labels coeffs dim {self.coeffs.shape[1]} != n_zernike {n_zernike}")
+
+        self._Image = Image
+
+    def __len__(self) -> int:
+        return len(self.paths)
+
+    def _load_image(self, path: Path) -> torch.Tensor:
+        img = np.array(self._Image.open(path).convert("L"), dtype=np.float32)
+        img = _normalize_shwfs_frame(img)
+        tensor = torch.from_numpy(img)[None, ...]
+        h, w = tensor.shape[-2:]
+        if h != self.detector_size or w != self.detector_size:
+            tensor = F.interpolate(
+                tensor.unsqueeze(0),
+                size=(self.detector_size, self.detector_size),
+                mode="bilinear",
+                align_corners=False,
+            ).squeeze(0)
+        return tensor
+
+    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        image = self._load_image(self.paths[idx])
+        phase = self.phases[idx]
+        if phase.ndim == 2:
+            phase = phase[None, ...]
+        phase_t = torch.from_numpy(phase.astype(np.float32))
+        if phase_t.shape[-2:] != (self.detector_size, self.detector_size):
+            phase_t = F.interpolate(
+                phase_t.unsqueeze(0),
+                size=(self.detector_size, self.detector_size),
+                mode="bilinear",
+                align_corners=False,
+            ).squeeze(0)
+        return {
+            "image": image,
+            "coeffs": torch.from_numpy(self.coeffs[idx].astype(np.float32)),
+            "phase": phase_t,
+        }
+
 # ------------------------------- Neural Network -------------------------------
 
 
@@ -664,7 +744,7 @@ def export_to_onnx(
 
 
 def build_dataloaders(
-    dataset: DatasetGenerator,
+    dataset: Dataset,
     batch_size: int,
     val_fraction: float = 0.15,
 ) -> Tuple[DataLoader, DataLoader]:
@@ -690,6 +770,7 @@ def main() -> None:
     parser.add_argument("--spot-pixels", type=int, default=8)
     parser.add_argument("--grid-size", type=int, default=128)
     parser.add_argument("--undersample-factor", type=int, default=1)
+    parser.add_argument("--data-dir", type=str, default=None, help="Folder with .bmp frames and labels.npz")
     parser.add_argument("--checkpoint", type=str, default="wavefront_net.pt")
     parser.add_argument("--onnx", type=str, default="wavefront_net.onnx")
     parser.add_argument("--export-onnx", action="store_true")
@@ -703,7 +784,16 @@ def main() -> None:
         undersample_factor=args.undersample_factor,
     )
     simulator = OpticalSimulator(cfg)
-    dataset = DatasetGenerator(simulator, n_samples=args.samples, cache_in_memory=False)
+    if args.data_dir:
+        data_path = Path(args.data_dir)
+        if list(data_path.rglob("*.bmp")):
+            dataset = BmpShwfsDataset(data_path, n_zernike=cfg.n_zernike, detector_size=cfg.detector_size)
+            print(f"Using {len(dataset)} real .bmp frames from {data_path.resolve()}")
+        else:
+            print(f"--data-dir {data_path} has no .bmp files; using synthetic data.")
+            dataset = DatasetGenerator(simulator, n_samples=args.samples, cache_in_memory=False)
+    else:
+        dataset = DatasetGenerator(simulator, n_samples=args.samples, cache_in_memory=False)
     train_loader, val_loader = build_dataloaders(dataset, batch_size=args.batch_size)
 
     model = WavefrontNet(

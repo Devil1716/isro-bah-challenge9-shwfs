@@ -4,8 +4,8 @@ Phase 2 utilities for ISRO BAH Challenge 9:
   - deformable mirror actuator command generation with inter-actuator coupling
 
 All phase maps are assumed to be optical phase in radians unless otherwise
-noted. The functions are NumPy/SciPy based so they can be used directly on
-outputs from shwfs_pipeline.py.
+noted. The functions are NumPy based so they can be used directly on outputs
+from shwfs_pipeline.py.
 """
 
 from __future__ import annotations
@@ -167,6 +167,7 @@ def calculate_r0_tau0(
         temporal_dphi[j] = np.mean(diff * diff)
 
     target = 1.0
+    tau0_is_lower_bound = False
     if np.any(temporal_dphi >= target):
         k = int(np.argmax(temporal_dphi >= target))
         if k == 0:
@@ -177,13 +178,18 @@ def calculate_r0_tau0(
             alpha = (target - x0) / max(x1 - x0, 1e-12)
             tau0_s = float(t0 + alpha * (t1 - t0))
     else:
-        tau0_s = float("nan")
+        # The sequence did not decorrelate enough inside the observed window.
+        # Report the last observed lag as a conservative lower bound instead of
+        # returning NaN, which is more useful for dashboards and presentations.
+        tau0_s = float(lags[-1] / frame_rate_hz)
+        tau0_is_lower_bound = True
 
     v_eff = float(0.314 * r0_m / tau0_s) if np.isfinite(tau0_s) and tau0_s > 0 else float("nan")
 
     return {
         "r0_m": r0_m,
         "tau0_s": tau0_s,
+        "tau0_is_lower_bound": tau0_is_lower_bound,
         "v_eff_mps": v_eff,
         "wavelength_m": float(wavelength_m),
         "rho_m": rho_m,

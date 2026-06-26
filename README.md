@@ -33,3 +33,21 @@ trtexec --onnx=wavefront_net.onnx --saveEngine=wavefront_net_fp16.engine --fp16
 
 For deployment, load the generated TensorRT engine from C++ and keep detector
 preprocessing on the GPU to avoid avoidable latency.
+
+## ISRO Criteria Training
+
+The challenge-aligned training path uses explicit centroiding and modal
+wavefront reconstruction before neural training:
+
+```bash
+python train_isro_criteria.py --samples 384 --epochs 6 --batch-size 8 \
+  --grid-size 64 --n-lenslets 8 --spot-pixels 8 --n-zernike 15
+```
+
+This script:
+
+- centroids each SHWFS spot per sub-aperture
+- measures spot deviation from a flat-wavefront reference
+- reconstructs phase with a centroid-to-Zernike interaction matrix
+- trains `WavefrontNet` to predict the modal reconstruction
+- derives `r0`, `tau0`, and Fried-geometry DM actuator strokes with coupling
