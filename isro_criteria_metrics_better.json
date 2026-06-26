@@ -1,0 +1,17 @@
+{
+  "val_loss": 0.012179726222530007,
+  "coeff_mse": 0.0035521723330020905,
+  "phase_mse": 0.0422234833240509,
+  "phase_rmse_rad": 0.22095583379268646,
+  "r0_m_from_predicted_phases": 0.4056146937634823,
+  "tau0_s_from_predicted_phases": 0.001,
+  "tau0_is_lower_bound": false,
+  "v_eff_mps_from_predicted_phases": 127.36301384173343,
+  "dm_shape_yx": [
+    9,
+    9
+  ],
+  "dm_residual_rms_m": 1.6462737367213816e-09,
+  "avg_eval_time_ms_per_frame_cpu_or_gpu": 2.1258576546343657,
+  "input_pixels": 4096
+}

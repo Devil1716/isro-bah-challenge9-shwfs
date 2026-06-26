@@ -44,6 +44,19 @@ python train_isro_criteria.py --samples 384 --epochs 6 --batch-size 8 \
   --grid-size 64 --n-lenslets 8 --spot-pixels 8 --n-zernike 15
 ```
 
+Continue training on a broader synthetic distribution:
+
+```bash
+python train_isro_criteria.py --samples 2048 --epochs 12 --batch-size 16 \
+  --grid-size 64 --n-lenslets 8 --spot-pixels 8 --n-zernike 15 \
+  --r0-min 0.045 --r0-max 0.30 \
+  --photons-min 50000 --photons-max 600000 \
+  --dark-min 0 --dark-max 10 \
+  --read-noise-min 0.1 --read-noise-max 3.5 \
+  --resume wavefront_net_isro_centroid.pt \
+  --checkpoint wavefront_net_isro_better.pt
+```
+
 This script:
 
 - centroids each SHWFS spot per sub-aperture

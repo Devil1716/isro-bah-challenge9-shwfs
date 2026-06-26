@@ -454,8 +454,8 @@ class SpotDescriptorLayer(nn.Module):
 
         coords = torch.linspace(-1.0, 1.0, self.tile)
         yy, xx = torch.meshgrid(coords, coords, indexing="ij")
-        self.register_buffer("xx", xx[None, None, ...])
-        self.register_buffer("yy", yy[None, None, ...])
+        self.register_buffer("xx", xx[None, None, ...].clone())
+        self.register_buffer("yy", yy[None, None, ...].clone())
 
     def forward(self, image: torch.Tensor) -> torch.Tensor:
         b, c, h, w = image.shape

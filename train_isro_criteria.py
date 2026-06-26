@@ -147,6 +147,11 @@ def write_report(path: Path, metrics: Dict[str, float | List[float]], args: argp
         f"- Grid size: {args.grid_size}",
         f"- Spot pixels per lenslet: {args.spot_pixels}",
         f"- Zernike modes: {args.n_zernike}",
+        f"- r0 range: {args.r0_min} m to {args.r0_max} m",
+        f"- photons/frame range: {args.photons_min} to {args.photons_max}",
+        f"- dark current range: {args.dark_min} to {args.dark_max} e-",
+        f"- read noise range: {args.read_noise_min} to {args.read_noise_max} e- RMS",
+        f"- resumed from: {args.resume or 'none'}",
         "",
         "## Evaluation Criteria Evidence",
         "",
@@ -173,6 +178,15 @@ def main() -> None:
     parser.add_argument("--n-lenslets", type=int, default=8)
     parser.add_argument("--spot-pixels", type=int, default=8)
     parser.add_argument("--n-zernike", type=int, default=15)
+    parser.add_argument("--r0-min", type=float, default=0.045)
+    parser.add_argument("--r0-max", type=float, default=0.28)
+    parser.add_argument("--photons-min", type=float, default=5.0e4)
+    parser.add_argument("--photons-max", type=float, default=5.0e5)
+    parser.add_argument("--dark-min", type=float, default=0.0)
+    parser.add_argument("--dark-max", type=float, default=8.0)
+    parser.add_argument("--read-noise-min", type=float, default=0.1)
+    parser.add_argument("--read-noise-max", type=float, default=3.0)
+    parser.add_argument("--resume", type=str, default=None, help="Optional checkpoint to continue training from")
     parser.add_argument("--checkpoint", type=str, default="wavefront_net_isro_centroid.pt")
     parser.add_argument("--report", type=str, default="ISRO_CRITERIA_REPORT.md")
     parser.add_argument("--metrics-json", type=str, default="isro_criteria_metrics.json")
@@ -189,7 +203,16 @@ def main() -> None:
         simulator,
         ModalReconstructorConfig(calibration_amplitude_rad=0.03, centroid_threshold_fraction=0.08),
     )
-    dataset = CentroidModalDataset(simulator, modal, n_samples=args.samples, cache_in_memory=True)
+    dataset = CentroidModalDataset(
+        simulator,
+        modal,
+        n_samples=args.samples,
+        r0_range=(args.r0_min, args.r0_max),
+        photons_range=(args.photons_min, args.photons_max),
+        dark_current_range=(args.dark_min, args.dark_max),
+        read_noise_range=(args.read_noise_min, args.read_noise_max),
+        cache_in_memory=True,
+    )
     train_loader, val_loader = build_loaders(dataset, batch_size=args.batch_size)
 
     model = WavefrontNet(
@@ -199,6 +222,11 @@ def main() -> None:
         zernike_basis=simulator.zernike_stack,
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if args.resume:
+        checkpoint = torch.load(args.resume, map_location="cpu")
+        state = checkpoint["model_state"] if isinstance(checkpoint, dict) and "model_state" in checkpoint else checkpoint
+        model.load_state_dict(state)
+        print(f"Resumed model weights from {Path(args.resume).resolve()}")
     print(f"Using device: {device}")
     print("Training targets: centroid deviations -> modal Zernike reconstruction -> phase map.")
 

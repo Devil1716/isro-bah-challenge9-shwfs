@@ -78,3 +78,57 @@ Key evaluation outputs:
 Generated artifact:
 
 - `wavefront_net_isro_centroid.pt`
+
+## Better Synthetic Data Continuation
+
+Date: 2026-06-26
+
+Command:
+
+```bash
+python train_isro_criteria.py --samples 2048 --epochs 12 --batch-size 16 \
+  --grid-size 64 --n-lenslets 8 --spot-pixels 8 --n-zernike 15 \
+  --r0-min 0.045 --r0-max 0.30 \
+  --photons-min 50000 --photons-max 600000 \
+  --dark-min 0 --dark-max 10 \
+  --read-noise-min 0.1 --read-noise-max 3.5 \
+  --resume wavefront_net_isro_centroid.pt \
+  --checkpoint wavefront_net_isro_better.pt
+```
+
+This continuation uses a wider synthetic distribution:
+
+- Fried parameter randomized from `0.045 m` to `0.30 m`
+- photon flux randomized from `5.0e4` to `6.0e5` photons/frame
+- dark current randomized from `0` to `10` electrons
+- read noise randomized from `0.1` to `3.5` electrons RMS
+
+Loss history:
+
+| Epoch | Train Loss | Validation Loss |
+|---:|---:|---:|
+| 1 | 3.684585e-02 | 2.129981e-02 |
+| 2 | 2.499496e-02 | 2.766261e-02 |
+| 3 | 2.079821e-02 | 1.694522e-02 |
+| 4 | 1.755714e-02 | 1.508739e-02 |
+| 5 | 1.653347e-02 | 2.234910e-02 |
+| 6 | 1.542786e-02 | 1.678426e-02 |
+| 7 | 1.408960e-02 | 1.264579e-02 |
+| 8 | 1.337737e-02 | 1.145178e-02 |
+| 9 | 1.278724e-02 | 1.205141e-02 |
+| 10 | 1.222433e-02 | 1.585430e-02 |
+| 11 | 1.190768e-02 | 1.167148e-02 |
+| 12 | 1.171723e-02 | 1.217973e-02 |
+
+Key evaluation outputs:
+
+- Phase RMSE: `0.220956 rad`
+- Fried parameter from predicted phases: `r0 = 0.405615 m`
+- Coherence time from predicted phases: `tau0 = 0.001 s`
+- Fried-geometry DM grid: `9 x 9`
+- Coupled-DM residual RMS: `1.646274e-09 m`
+- CPU evaluation time: `2.125858 ms/frame`
+
+Generated artifact:
+
+- `wavefront_net_isro_better.pt`

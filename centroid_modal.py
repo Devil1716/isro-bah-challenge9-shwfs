@@ -22,7 +22,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from shwfs_pipeline import DatasetGenerator, OpticalConfig, OpticalSimulator
+from shwfs_pipeline import OpticalConfig, OpticalSimulator
 
 
 def centroid_spots(
@@ -205,12 +205,18 @@ class CentroidModalDataset(Dataset):
         reconstructor: CentroidModalReconstructor,
         n_samples: int,
         r0_range: Tuple[float, float] = (0.06, 0.22),
+        photons_range: Tuple[float, float] = (8.0e4, 4.0e5),
+        dark_current_range: Tuple[float, float] = (0.0, 6.0),
+        read_noise_range: Tuple[float, float] = (0.2, 2.5),
         cache_in_memory: bool = True,
     ):
         self.sim = simulator
         self.reconstructor = reconstructor
         self.n_samples = n_samples
         self.r0_range = r0_range
+        self.photons_range = photons_range
+        self.dark_current_range = dark_current_range
+        self.read_noise_range = read_noise_range
         self.cache = []
         if cache_in_memory:
             for _ in range(n_samples):
@@ -220,16 +226,27 @@ class CentroidModalDataset(Dataset):
         return self.n_samples
 
     def _make_sample(self) -> Dict[str, torch.Tensor]:
+        old_photons = self.sim.cfg.photons_per_frame
+        old_dark = self.sim.cfg.dark_current_electrons
+        old_read = self.sim.cfg.read_noise_std
         r0 = self.sim.rng.uniform(*self.r0_range)
-        phase = self.sim.generate_phase_screen(r0=r0)
-        image = self.sim.simulate_shwfs_image(phase)
-        coeffs = self.reconstructor.reconstruct_coeffs_from_image(image)
-        reconstructed_phase = self.sim.zernikes_to_phase(coeffs)
-        return {
-            "image": torch.from_numpy(image[None, ...].astype(np.float32)),
-            "coeffs": torch.from_numpy(coeffs.astype(np.float32)),
-            "phase": torch.from_numpy(reconstructed_phase[None, ...].astype(np.float32)),
-        }
+        self.sim.cfg.photons_per_frame = float(self.sim.rng.uniform(*self.photons_range))
+        self.sim.cfg.dark_current_electrons = float(self.sim.rng.uniform(*self.dark_current_range))
+        self.sim.cfg.read_noise_std = float(self.sim.rng.uniform(*self.read_noise_range))
+        try:
+            phase = self.sim.generate_phase_screen(r0=r0)
+            image = self.sim.simulate_shwfs_image(phase)
+            coeffs = self.reconstructor.reconstruct_coeffs_from_image(image)
+            reconstructed_phase = self.sim.zernikes_to_phase(coeffs)
+            return {
+                "image": torch.from_numpy(image[None, ...].astype(np.float32)),
+                "coeffs": torch.from_numpy(coeffs.astype(np.float32)),
+                "phase": torch.from_numpy(reconstructed_phase[None, ...].astype(np.float32)),
+            }
+        finally:
+            self.sim.cfg.photons_per_frame = old_photons
+            self.sim.cfg.dark_current_electrons = old_dark
+            self.sim.cfg.read_noise_std = old_read
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         if self.cache:
@@ -252,6 +269,7 @@ def build_centroid_modal_dataset(
     spot_pixels: int = 8,
     n_zernike: int = 15,
     n_samples: int = 256,
+    r0_range: Tuple[float, float] = (0.06, 0.22),
 ) -> Tuple[CentroidModalDataset, OpticalSimulator, CentroidModalReconstructor]:
     cfg = OpticalConfig(
         grid_size=grid_size,
@@ -261,5 +279,5 @@ def build_centroid_modal_dataset(
     )
     simulator = OpticalSimulator(cfg)
     reconstructor = CentroidModalReconstructor(simulator)
-    dataset = CentroidModalDataset(simulator, reconstructor, n_samples=n_samples)
+    dataset = CentroidModalDataset(simulator, reconstructor, n_samples=n_samples, r0_range=r0_range)
     return dataset, simulator, reconstructor
