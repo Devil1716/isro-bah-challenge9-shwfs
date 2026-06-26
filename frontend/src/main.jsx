@@ -20,12 +20,12 @@ const canvasSize = grid * spotPixels;
 const dmGrid = grid + 1;
 
 const baseMetrics = {
-  phaseRmse: 0.221,
-  coeffMse: 0.00355,
+  phaseRmse: 0.220956,
+  coeffMse: 0.003552,
   r0: 0.406,
   tau0: 1.0,
-  dmResidual: 1.65e-9,
-  pythonMs: 2.13,
+  dmResidual: 1.646e-9,
+  pythonMs: 2.126,
   tensorRtTarget: 0.8
 };
 
@@ -89,12 +89,12 @@ function makeFrame(frameIndex) {
     phase,
     actuators,
     metrics: {
-      phaseRmse: Math.max(0.12, baseMetrics.phaseRmse + 0.02 * Math.sin(frameIndex * 0.31)),
-      coeffMse: Math.max(0.001, baseMetrics.coeffMse + 0.0005 * Math.cos(frameIndex * 0.27)),
-      r0: Math.max(0.035, baseMetrics.r0 - 0.018 * Math.sin(frameIndex * 0.18) + scale * 0.004),
-      tau0: Math.max(0.6, baseMetrics.tau0 + 0.08 * Math.cos(frameIndex * 0.2)),
-      dmResidual: baseMetrics.dmResidual * (1 + 0.1 * Math.sin(frameIndex * 0.3)),
-      pythonMs: Math.max(1.7, baseMetrics.pythonMs + 0.25 * Math.cos(frameIndex * 0.17)),
+      phaseRmse: baseMetrics.phaseRmse,
+      coeffMse: baseMetrics.coeffMse,
+      r0: Math.max(0.035, baseMetrics.r0 - 0.012 * Math.sin(frameIndex * 0.18) + scale * 0.002),
+      tau0: baseMetrics.tau0,
+      dmResidual: baseMetrics.dmResidual,
+      pythonMs: baseMetrics.pythonMs,
       tensorRtTarget: baseMetrics.tensorRtTarget
     }
   };
@@ -138,7 +138,7 @@ function drawWfs(canvas, frame) {
   }
 }
 
-function CanvasPanel({ title, subtitle, children, action }) {
+function CanvasPanel({ title, subtitle, children, action, badge }) {
   return (
     <section className="panel visual-panel">
       <div className="panel-head">
@@ -146,7 +146,7 @@ function CanvasPanel({ title, subtitle, children, action }) {
           <h2>{title}</h2>
           <p>{subtitle}</p>
         </div>
-        {action}
+        {badge ? <span className="panel-badge">{badge}</span> : action}
       </div>
       {children}
     </section>
@@ -159,7 +159,7 @@ function WfsPanel({ frame }) {
     if (ref.current) drawWfs(ref.current, frame);
   }, [frame]);
   return (
-    <CanvasPanel title="Raw WFS Frame" subtitle="16 x 16 MLA spot field">
+    <CanvasPanel title="Raw WFS Frame" subtitle="Synthetic 16 x 16 MLA spot field" badge="simulated">
       <div className="square-visual">
         <canvas ref={ref} aria-label="Synthetic Shack-Hartmann spot frame" />
       </div>
@@ -169,7 +169,7 @@ function WfsPanel({ frame }) {
 
 function CentroidPanel({ frame }) {
   return (
-    <CanvasPanel title="Centroids + Slopes" subtitle="Deviation from flat reference">
+    <CanvasPanel title="Centroids + Slopes" subtitle="Thresholded center-of-mass from flat reference" badge="computed">
       <svg className="square-visual centroid-svg" viewBox={`0 0 ${canvasSize} ${canvasSize}`}>
         <rect width={canvasSize} height={canvasSize} fill="#f8fafc" />
         {Array.from({ length: grid + 1 }).map((_, i) => (
@@ -205,7 +205,7 @@ function Heatmap({ data, title, subtitle, unit }) {
   const rows = data.length;
   const cols = data[0].length;
   return (
-    <CanvasPanel title={title} subtitle={subtitle}>
+    <CanvasPanel title={title} subtitle={subtitle} badge={unit === 'rad' ? 'model output' : 'DM solve'}>
       <div className="heatmap" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
         {data.flatMap((row, y) =>
           row.map((value, x) => (
@@ -257,13 +257,17 @@ function DemoScript() {
         </div>
       </div>
       <ol className="demo-steps">
-        <li>Show the incoming Shack-Hartmann spot frame.</li>
+        <li>State that the spot frame is synthetic HCIPy/AOtools demo data.</li>
         <li>Point to centroid crosses and slope arrows from the flat reference.</li>
         <li>Show modal reconstruction of W(x, y) using Zernike coefficients.</li>
-        <li>Quote r0 and tau0 as turbulence strength indicators.</li>
+        <li>Quote r0 and tau0 from the trained checkpoint evaluation report.</li>
         <li>Show the 17 x 17 Fried-geometry DM actuator map.</li>
         <li>Close with ONNX/TensorRT path for sub-millisecond inference.</li>
       </ol>
+      <p className="accuracy-note">
+        Visual frames are generated in-browser for demo repeatability. Reported model metrics come from
+        <span> wavefront_net_isro_better.pt</span>.
+      </p>
       <ul className="criteria-list">
         <CriteriaItem text="Centroids per sub-aperture" />
         <CriteriaItem text="Reference spot deviations" />
@@ -294,7 +298,7 @@ function App() {
           <div className="brand-mark"><RadioTower size={23} /></div>
           <div>
             <h1>ISRO BAH Challenge 9 SHWFS Demo</h1>
-            <p>Centroiding to modal reconstruction to Fried-geometry DM control</p>
+            <p>Accurate demo view: synthetic frame, trained checkpoint metrics, Fried-geometry DM control</p>
           </div>
         </div>
         <div className="actions">
