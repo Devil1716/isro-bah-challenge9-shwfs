@@ -247,23 +247,22 @@ function CriteriaItem({ text }) {
   );
 }
 
-function DemoScript() {
+function ModelEvidence() {
   return (
-    <section className="panel script-panel">
+    <section className="panel evidence-panel">
       <div className="panel-head">
         <div>
-          <h2>3 Minute Judge Demo</h2>
-          <p>Say this flow while clicking Generate Frame.</p>
+          <h2>Model Evidence</h2>
+          <p>Checkpoint-backed metrics and challenge criteria status.</p>
         </div>
       </div>
-      <ol className="demo-steps">
-        <li>State that the spot frame is synthetic HCIPy/AOtools demo data.</li>
-        <li>Point to centroid crosses and slope arrows from the flat reference.</li>
-        <li>Show modal reconstruction of W(x, y) using Zernike coefficients.</li>
-        <li>Quote r0 and tau0 from the trained checkpoint evaluation report.</li>
-        <li>Show the 17 x 17 Fried-geometry DM actuator map.</li>
-        <li>Close with ONNX/TensorRT path for sub-millisecond inference.</li>
-      </ol>
+      <div className="evidence-table">
+        <div><span>Checkpoint</span><strong>wavefront_net_isro_better.pt</strong></div>
+        <div><span>Training frames</span><strong>2048 synthetic WFS</strong></div>
+        <div><span>Lenslet geometry</span><strong>16 x 16 visual, 17 x 17 DM</strong></div>
+        <div><span>Validation target</span><strong>Phase RMSE below 0.30 rad</strong></div>
+        <div><span>Runtime path</span><strong>PyTorch to ONNX to TensorRT</strong></div>
+      </div>
       <p className="accuracy-note">
         Visual frames are generated in-browser for demo repeatability. Reported model metrics come from
         <span> wavefront_net_isro_better.pt</span>.
@@ -328,7 +327,7 @@ function App() {
           <Heatmap data={frame.phase} title="Reconstructed Phase W(x,y)" subtitle="Modal Zernike phase map" unit="rad" />
           <Heatmap data={frame.actuators} title="DM Actuator Map" subtitle="17 x 17 Fried geometry strokes" unit="m" />
         </div>
-        <DemoScript />
+        <ModelEvidence />
       </section>
     </main>
   );

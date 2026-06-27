@@ -2,14 +2,14 @@
 
 ## Training Setup
 
-- Synthetic samples: 384
-- Epochs: 6
-- Batch size: 8
-- Lenslets: 8 x 8
-- Fried-geometry DM actuators: 9 x 9
-- Grid size: 64
+- Synthetic samples: 10000
+- Epochs: 50
+- Batch size: 64
+- Lenslets: 16 x 16
+- Fried-geometry DM actuators: 17 x 17
+- Grid size: 128
 - Spot pixels per lenslet: 8
-- Zernike modes: 15
+- Zernike modes: 35
 
 ## Evaluation Criteria Evidence
 
@@ -21,15 +21,15 @@
 
 ## Metrics
 
-- `val_loss`: 0.05474389856681228
-- `coeff_mse`: 0.02933320216834545
-- `phase_mse`: 0.34791675209999084
-- `phase_rmse_rad`: 0.5878881216049194
-- `r0_m_from_predicted_phases`: 0.39751649427898805
+- `val_loss`: 0.024523029724756878
+- `coeff_mse`: 0.002980651333928108
+- `phase_mse`: 0.08375407755374908
+- `phase_rmse_rad`: 0.2955712378025055
+- `r0_m_from_predicted_phases`: 0.31542835755463294
 - `tau0_s_from_predicted_phases`: 0.001
 - `tau0_is_lower_bound`: False
-- `v_eff_mps_from_predicted_phases`: 124.82017920360225
-- `dm_shape_yx`: [9, 9]
-- `dm_residual_rms_m`: 1.1382898682185692e-09
-- `avg_eval_time_ms_per_frame_cpu_or_gpu`: 3.9128035086354145
-- `input_pixels`: 4096
+- `v_eff_mps_from_predicted_phases`: 99.04450427215474
+- `dm_shape_yx`: [17, 17]
+- `dm_residual_rms_m`: 6.407532521314274e-10
+- `avg_eval_time_ms_per_frame_cpu_or_gpu`: 6.535005133327407
+- `input_pixels`: 16384
