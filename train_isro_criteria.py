@@ -31,6 +31,7 @@ from centroid_modal import (
     ModalReconstructorConfig,
     fried_geometry_dm_shape,
 )
+from confusion import classify_turbulence_strength
 from shwfs_pipeline import OpticalConfig, OpticalSimulator, WavefrontLoss, WavefrontNet, train_loop
 from turbulence_dm import DMConfig, calculate_r0_tau0, generate_actuator_map
 
@@ -56,16 +57,22 @@ def evaluate_isro_criteria(
     n_lenslets: int,
     device: torch.device,
     max_phase_frames: int = 32,
-) -> Dict[str, float | List[float]]:
+) -> Dict[str, float | List[float] | dict]:
     model.eval()
     coeff_errors = []
     phase_errors = []
     phase_targets = []
     phase_preds = []
+    true_r0s = []
+    predicted_r0s = []
+    frame_true_labels = []
+    frame_predicted_labels = []
+    phase_rmse_by_r0 = {}
     loss_fn = WavefrontLoss(smoothness_weight=1e-4)
     losses = []
 
     input_pixels = simulator.cfg.detector_size * simulator.cfg.detector_size
+    pupil_mask = simulator.pupil_mask.astype(bool)
     timing_iters = 0
     timing_start = time.perf_counter()
     for batch in val_loader:
@@ -79,9 +86,39 @@ def evaluate_isro_criteria(
         coeff_errors.append(torch.mean((pred["coeffs"] - coeffs) ** 2, dim=1).cpu().numpy())
         if "phase" in pred:
             phase_errors.append(torch.mean((pred["phase"] - phase) ** 2, dim=(1, 2, 3)).cpu().numpy())
+            batch_pred_phases = pred["phase"][:, 0].cpu().numpy()
+            batch_true_phases = phase[:, 0].cpu().numpy()
             if len(phase_preds) < max_phase_frames:
-                phase_preds.extend(pred["phase"][:, 0].cpu().numpy())
-                phase_targets.extend(phase[:, 0].cpu().numpy())
+                frame_limit = max_phase_frames - len(phase_preds)
+                phase_preds.extend(batch_pred_phases[:frame_limit])
+                phase_targets.extend(batch_true_phases[:frame_limit])
+
+            pixel_scale_m = simulator.cfg.aperture_diameter_m / simulator.cfg.grid_size
+            for idx in range(batch_pred_phases.shape[0]):
+                if "r0" in batch:
+                    true_r0 = float(batch["r0"][idx].cpu().item())
+                    true_r0s.append(true_r0)
+                    label = classify_turbulence_strength(true_r0)
+                    frame_true_labels.append(label)
+                    phase_rmse = float(np.sqrt(np.mean((batch_pred_phases[idx] - batch_true_phases[idx]) ** 2)))
+                    bin_key = f"{true_r0:.3f}"
+                    phase_rmse_by_r0.setdefault(bin_key, []).append(phase_rmse)
+
+                    try:
+                        pred_stats = calculate_r0_tau0(
+                            batch_pred_phases[idx][None, ...],
+                            pixel_scale_m=pixel_scale_m,
+                            frame_rate_hz=1000.0,
+                            wavelength_m=simulator.cfg.wavelength_m,
+                            pupil_mask=pupil_mask,
+                            max_pairs=5_000,
+                            n_bins=12,
+                        )
+                        pred_r0 = float(pred_stats["r0_m"])
+                    except ValueError:
+                        pred_r0 = float("nan")
+                    predicted_r0s.append(pred_r0)
+                    frame_predicted_labels.append(classify_turbulence_strength(pred_r0) if np.isfinite(pred_r0) else "Strong")
         timing_iters += image.shape[0]
     timing_s = max(time.perf_counter() - timing_start, 1e-12)
 
@@ -117,6 +154,7 @@ def evaluate_isro_criteria(
         return_diagnostics=True,
     )
 
+    phase_rmse_by_r0 = {k: float(np.mean(v)) for k, v in phase_rmse_by_r0.items()}
     return {
         "val_loss": float(np.mean(losses)),
         "coeff_mse": float(np.mean(np.concatenate(coeff_errors))),
@@ -130,6 +168,10 @@ def evaluate_isro_criteria(
         "dm_residual_rms_m": float(dm_diag["rms_residual_m"]),
         "avg_eval_time_ms_per_frame_cpu_or_gpu": float(1000.0 * timing_s / max(timing_iters, 1)),
         "input_pixels": int(input_pixels),
+        "training_history": [],
+        "phase_rmse_by_r0": phase_rmse_by_r0,
+        "frame_true_labels": frame_true_labels,
+        "frame_predicted_labels": frame_predicted_labels,
     }
 
 
@@ -230,6 +272,7 @@ def main() -> None:
     print(f"Using device: {device}")
     print("Training targets: centroid deviations -> modal Zernike reconstruction -> phase map.")
 
+    training_history: list[float] = []
     train_loop(
         model,
         train_loader,
@@ -237,9 +280,11 @@ def main() -> None:
         epochs=args.epochs,
         device=device,
         checkpoint_path=args.checkpoint,
+        history=training_history,
     )
 
     metrics = evaluate_isro_criteria(model, val_loader, simulator, args.n_lenslets, device)
+    metrics["training_history"] = training_history
     Path(args.metrics_json).write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     write_report(Path(args.report), metrics, args)
     print(json.dumps(metrics, indent=2))

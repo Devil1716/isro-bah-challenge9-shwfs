@@ -109,3 +109,14 @@ def generate_metrics_report(metrics_path: Union[str, Path], report_path: Union[s
 
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return report_path
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate a markdown report from ISRO metrics JSON")
+    parser.add_argument("--metrics-json", type=str, default="isro_criteria_metrics.json")
+    parser.add_argument("--report", type=str, default="ISRO_CRITERIA_REPORT.md")
+    args = parser.parse_args()
+    generate_metrics_report(args.metrics_json, args.report)
+    print(f"Wrote {args.report}")
